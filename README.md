@@ -2,6 +2,18 @@
 
 AWS Quick（Amazon Quick）账号自动注册与本地 OAuth 凭证导出控制台（FastAPI 后端 + Next.js 前端 + Playwright）。
 
+## 这是什么 / 产物
+
+这是一个批量注册、批量养 AWS Quick 账号的“养号农场”（account farm）。你给它一批邮箱（Outlook 邮箱或接码 URL）和可选的代理，它自动把每个邮箱注册成一个 Quick 账号。
+
+跑完之后得到的产物是：
+
+- **一批注册好的 Quick 账号**：每个账号的邮箱和密码记在本地 `accounts.json` 里，控制台总览页能看到谁注册了、谁还没注册。
+- **每个账号一份 OAuth 凭证 JSON**：含登录 Quick 所需的凭证（`client_id` / `refresh_token` 等），点「导出 JSON」即可下载，格式可直接导入 quick2api 这类网关当号池用。
+- **账号复验**：`login_check.py` 能拿 `accounts.json` 里的账号重新登录一次，确认号还能正常进工作区。
+
+注意它本身不是 API 网关，不提供 Quick 对话服务，只负责把号注册出来、把凭证导出来；号怎么用（进哪个网关、跑什么模型）由网关那边决定。
+
 ## 功能特性
 
 - **全自动注册**：Playwright 驱动完成落地页 → 邮箱 → 姓名 → 自动收验证码 → 设密码 → 工作区引导。
