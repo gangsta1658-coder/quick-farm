@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime secrets & generated data
+accounts.json
+outlook-tokens.json
+server/config.json
+bot.env
+keys/
+debug/
+*.log
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+  "admin_token": "",
+  "outlook": {
+    "token_file": "../outlook-tokens.json"
+  },
+  "proxy": {
+    "url": ""
+  },
+  "register": {
+    "batch_interval_s": 300
+  }
+}
