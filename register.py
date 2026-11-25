@@ -136,6 +136,9 @@ def playwright_proxy(raw_proxy):
     raw_proxy = (raw_proxy or '').strip()
     if not raw_proxy:
         return None
+    if '{rand}' in raw_proxy or '{ssid}' in raw_proxy:
+        sid = ''.join(secrets.choice(string.digits) for _ in range(8))
+        raw_proxy = raw_proxy.replace('{rand}', sid).replace('{ssid}', sid)
     from urllib.parse import urlparse, unquote
     u = urlparse(raw_proxy)
     if u.username is not None:
@@ -145,6 +148,36 @@ def playwright_proxy(raw_proxy):
             'password': unquote(u.password or ''),
         }
     return {'server': raw_proxy}
+
+
+def probe_proxy_geo(raw_proxy):
+    """Return (ip, country_code, timezone_id) for the proxy exit IP."""
+    import shutil, subprocess
+    curl_bin = shutil.which('curl') or shutil.which('curl.exe')
+    if not curl_bin or not raw_proxy:
+        return None, None, None
+    for url in (
+        'http://ip-api.com/json?fields=status,countryCode,timezone,query',
+        'https://ipwho.is/',
+    ):
+        try:
+            r = subprocess.run(
+                [curl_bin, '-sS', '-x', raw_proxy, '--max-time', '12', url],
+                capture_output=True, text=True, timeout=16,
+            )
+            if r.returncode != 0 or not r.stdout.strip():
+                continue
+            d = json.loads(r.stdout)
+            ip = d.get('query') or d.get('ip')
+            cc = d.get('countryCode') or d.get('country_code')
+            tz = d.get('timezone')
+            if isinstance(tz, dict):
+                tz = tz.get('id')
+            if ip or tz:
+                return ip, cc, tz
+        except Exception:
+            continue
+    return None, None, None
 
 # ---------- gateway credential export (OAuth, same browser/IP) ----------
 GW_BASE = os.environ.get('QUICK_GATEWAY_URL', '')
@@ -351,29 +384,53 @@ def run_one(local, args):
     print(f'[start] {email_addr} name={name}', flush=True)
 
     raw_proxy = os.environ.get('QUICK_BOT_PROXY', '').strip()
+    if raw_proxy and ('{rand}' in raw_proxy or '{ssid}' in raw_proxy):
+        sid = ''.join(secrets.choice(string.digits) for _ in range(8))
+        raw_proxy = raw_proxy.replace('{rand}', sid).replace('{ssid}', sid)
     proxy = playwright_proxy(raw_proxy)
+    tz_id = 'America/New_York'
     if raw_proxy:
         from urllib.parse import urlparse
         _u = urlparse(raw_proxy)
         print(f'[proxy] {_u.scheme}://{_u.hostname}:{_u.port}', flush=True)
+        ip, cc, tz = probe_proxy_geo(raw_proxy)
+        if tz:
+            tz_id = tz
+        if ip or cc or tz:
+            print(f'[ip] {ip or "?"} ({cc or "?"}) tz={tz_id}', flush=True)
     exe = os.environ.get('QUICK_BOT_EXE') or os.path.expanduser(
         '~/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome')
     launch_kw = {}
     if os.path.exists(exe): launch_kw['executable_path'] = exe
     if proxy: launch_kw['proxy'] = proxy
+    vw, vh = secrets.choice([(1366, 768), (1440, 900), (1536, 864), (1920, 1080), (1280, 800)])
+    hw_conc = secrets.choice([4, 8])
+    dev_mem = secrets.choice([4, 8])
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=not args.headful, **launch_kw,
             ignore_default_args=['--enable-automation'],
             args=['--disable-blink-features=AutomationControlled', '--no-sandbox',
                   '--ignore-certificate-errors'])
+        major = (browser.version or '131').split('.')[0]
+        plat = 'Windows NT 10.0; Win64; x64' if sys.platform.startswith('win') else 'X11; Linux x86_64'
+        ua = f'Mozilla/5.0 ({plat}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36'
         ctx = browser.new_context(
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            viewport={'width': 1280, 'height': 860}, locale='en-US')
-        ctx.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
-        # Block heavy resources: the host may be a 1 GB micro instance.
+            user_agent=ua,
+            viewport={'width': vw, 'height': vh},
+            screen={'width': vw, 'height': vh},
+            locale='en-US',
+            timezone_id=tz_id,
+        )
+        ctx.add_init_script(f"""
+            Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
+            Object.defineProperty(navigator, 'languages', {{get: () => ['en-US', 'en']}});
+            Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {hw_conc}}});
+            Object.defineProperty(navigator, 'deviceMemory', {{get: () => {dev_mem}}});
+            if (!window.chrome) window.chrome = {{runtime: {{}}}};
+        """)
         def _block(route):
-            if route.request.resource_type in ('image', 'media', 'font'):
+            if route.request.resource_type == 'media':
                 route.abort()
             else:
                 route.continue_()
@@ -533,7 +590,16 @@ def run_one(local, args):
                     f'otp={otp_done})')
             shot(page, f'{local}-4-password')
 
-            pw_ready = wait_step(page, ['input[type="password"]'], text_needles=('create your password',))
+            pw_ready = wait_step(
+                page, ['input[type="password"]'],
+                text_needles=('create your password', 'err-837',
+                              'issue with your builder id'))
+            try:
+                low_pw = page.inner_text('body').lower()
+            except Exception:
+                low_pw = ''
+            if 'err-837' in low_pw or 'issue with your builder id' in low_pw:
+                raise RuntimeError('AWS blocked signup (ERR-837)')
             if not pw_ready: raise RuntimeError('password page never appeared')
             pw_fields = page.locator('input[type="password"]')
             n = pw_fields.count()

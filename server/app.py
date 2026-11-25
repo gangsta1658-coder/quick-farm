@@ -102,6 +102,17 @@ def _proxy_url():
     return str((CFG.get("proxy") or {}).get("url") or "").strip()
 
 
+def _resolve_proxy_url(raw):
+    import secrets
+    raw = str(raw or "").strip()
+    if not raw:
+        return ""
+    if "{rand}" in raw or "{ssid}" in raw:
+        sid = "".join(secrets.choice("0123456789") for _ in range(8))
+        raw = raw.replace("{rand}", sid).replace("{ssid}", sid)
+    return raw
+
+
 def _safe_proxy_label(raw):
     from urllib.parse import urlparse
     u = urlparse(raw)
@@ -111,9 +122,13 @@ def _safe_proxy_label(raw):
     return f"{u.scheme}://{u.hostname}{port}"
 
 
-def _subprocess_env(provider, local=None, email_addr=None, use_proxy=True):
+def _subprocess_env(provider, local=None, email_addr=None, use_proxy=True,
+                    proxy_url=None):
     env = dict(os.environ)
-    env["QUICK_BOT_PROXY"] = _proxy_url() if use_proxy else ""
+    if proxy_url is not None:
+        env["QUICK_BOT_PROXY"] = proxy_url
+    else:
+        env["QUICK_BOT_PROXY"] = _resolve_proxy_url(_proxy_url()) if use_proxy else ""
     if provider in ("outlook", "url"):
         tok = _outlook_token_path()
         if tok:
@@ -127,9 +142,9 @@ def _run_register_task(task, items, use_proxy, do_export):
     log = task["log"].append
     failed, done_ok = [], []
     try:
-        proxy_url = _proxy_url() if use_proxy else ""
+        proxy_template = _proxy_url() if use_proxy else ""
         if use_proxy:
-            label = _safe_proxy_label(proxy_url)
+            label = _safe_proxy_label(proxy_template)
             if not label:
                 raise RuntimeError("已开启走代理，但未保存有效代理 URL")
             log(f"[task] proxy verified: {label}")
@@ -152,12 +167,14 @@ def _run_register_task(task, items, use_proxy, do_export):
                 log(f"[task] register {local}: mailbox not found, skipped")
                 failed.append(local)
                 continue
+            item_proxy = _resolve_proxy_url(proxy_template) if use_proxy else ""
             cmd = [PY, os.path.join(BASE, "register.py"), local]
             log(f"[task] register {email_addr}: {' '.join(cmd[1:])}")
             proc = subprocess.Popen(
                 cmd, cwd=BASE, env=_subprocess_env(provider, local,
                                                    email_addr,
-                                                   use_proxy=use_proxy),
+                                                   use_proxy=use_proxy,
+                                                   proxy_url=item_proxy),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1)
             for line in proc.stdout:
@@ -171,7 +188,7 @@ def _run_register_task(task, items, use_proxy, do_export):
             if do_export:
                 log(f"[task] export {email_addr} (local OAuth)")
                 res = export_service.export_account(
-                    email_addr, proxy_url=proxy_url,
+                    email_addr, proxy_url=item_proxy,
                     log=lambda m: log(str(m)))
                 log(f"[task] exported: {res}")
         if failed:
@@ -191,7 +208,7 @@ def _run_register_task(task, items, use_proxy, do_export):
 def _run_export_task(task, email_key, use_proxy):
     log = task["log"].append
     try:
-        proxy_url = _proxy_url() if use_proxy else ""
+        proxy_url = _resolve_proxy_url(_proxy_url()) if use_proxy else ""
         res = export_service.export_account(
             email_key, proxy_url=proxy_url, log=lambda m: log(str(m)))
         task["status"] = "done"
@@ -278,7 +295,7 @@ async def test_proxy(req: Request,
     raw = str(body.get("url") if "url" in body else _proxy_url()).strip()
     if not raw:
         raise HTTPException(400, "请先填入代理 URL")
-    return await asyncio.to_thread(_probe_proxy, raw)
+    return await asyncio.to_thread(_probe_proxy, _resolve_proxy_url(raw))
 
 
 @app.get("/api/mailboxes")

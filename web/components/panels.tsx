@@ -866,7 +866,7 @@ export function SettingsPanel({ conn }: { conn: Conn }) {
         <CardHeader>
           <CardTitle>代理与节奏</CardTitle>
           <CardDescription>
-            填入代理 URL 后可先测试连通性，再点击保存生效；留空则直连。
+            填入代理 URL 后可先测试连通性，再点击保存生效；支持 {"{rand}"} 占位符自动为每个账号生成独立随机会话，留空则直连。
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">

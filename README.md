@@ -30,9 +30,9 @@ AWS Quick（2026 年 11 月 9 日前叫 Amazon Quick）是亚马逊的 AI 工作
   - `邮箱----密码----client_id----refresh_token`（或 `邮箱----client_id----refresh_token`）：自动识别 Microsoft Graph（`Mail.Read`）与 IMAP XOAUTH2（`outlook.office365.com` / `outlook.live.com`），支持刷新令牌自动轮换落盘。
   - `邮箱----接码URL`（或 `邮箱----密码----接码URL`）：兼容 JSON 数组、包裹对象、单条验证码 JSON 与纯文本/HTML 响应。
   - 控制台内置「接验证码」收件箱面板，支持直接查看最近邮件与一键复制 6 位验证码。
-- **代理管理与校验**：
-  - 设置页配置代理 URL（支持 `http://user:pass@host:port`、`http://host:port`、`socks5://...`，留空直连）。
-  - 支持一键「测试连通性」（探测出口 IP 与延迟）。
+- **代理管理与指纹对齐**：
+  - 设置页配置代理 URL（支持 `http://user:pass@host:port`、`http://host:port`、`socks5://...`，留空直连），支持 `{rand}` 占位符为每个账号自动生成独立 8 位随机会话 ID。
+  - 支持一键「测试连通性」（探测出口 IP 与延迟），自动根据代理出口 IP 匹配浏览器 `timezone_id` 与系统一致的 UA/屏幕指纹。
   - 注册页「走代理」开关开启时，启动前自动校验是否已保存有效代理 URL。
 - **本地 OAuth 导出**：内置 PKCE OAuth 客户端（`server/oauth_local.py`），在本地后端直接完成登录与授权回调换取凭证 JSON，无需依赖外部网关。
 
