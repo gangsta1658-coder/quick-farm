@@ -11,6 +11,7 @@ AWS Quick（Amazon Quick）账号自动注册与本地 OAuth 凭证导出控制�
 - **一批注册好的 Quick 账号**：每个账号的邮箱和密码记在本地 `accounts.json` 里，控制台总览页能看到谁注册了、谁还没注册。
 - **每个账号一份 OAuth 凭证 JSON**：含登录 Quick 所需的凭证（`client_id` / `refresh_token` 等），点「导出 JSON」即可下载，格式可直接导入 quick2api 这类网关当号池用。
 - **账号复验**：`login_check.py` 能拿 `accounts.json` 里的账号重新登录一次，确认号还能正常进工作区。
+- **每个账号每月 10 小时 Opus 5.5 用量**：每多注册一个账号，就多一份每月 10 小时的 Opus 5.5（quick-smart）用量，号越多，总时长越多。
 
 注意它本身不是 API 网关，不提供 Quick 对话服务，只负责把号注册出来、把凭证导出来；号怎么用（进哪个网关、跑什么模型）由网关那边决定。
 
